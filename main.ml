@@ -52,7 +52,6 @@ let rec string_of_tm e =
 type context = (string * ty) list
 exception Type_error
 
-let eelse:tvar = "Else";;
 
 let rec infer_type c t =
     try
