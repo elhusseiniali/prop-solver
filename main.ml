@@ -18,7 +18,7 @@ type ty =
  *)
 type tm =
     | Var of var
-    | App of (var * var)
+    | App of (tm * tm)
     | Abs of (var * ty * tm)
 
 
@@ -40,9 +40,9 @@ let rec string_of_ty e =
  *)
 let rec string_of_tm e =
   match e with
-  | Var(t) -> t
-  | App(a, b) -> String.concat "" ["("; String.concat " " [a; b]; ")"]
-  | Abs(a, t, b) -> String.concat "" ["\u{03bb}"; "("; a; ": "; string_of_ty(t); ")."; string_of_tm(b)]
+    | Var(t) -> t
+    | App(a, b) -> String.concat "" ["("; String.concat "." [string_of_tm a; string_of_tm b]; ")"]
+    | Abs(a, t, b) -> String.concat "" ["\u{03bb}"; "("; a; ": "; string_of_ty(t); ")."; string_of_tm(b)]
 
 
 
@@ -52,78 +52,149 @@ let rec string_of_tm e =
 type context = (string * ty) list
 exception Type_error
 
+let ex1 = Failure "first"
+let ex2 = Failure "second"
+
 
 let rec infer_type c t =
     try
         match t with
-        | Var(e) -> List.assoc e c
-        | App(a, b) -> (
-            match List.assoc a c with
-             | Term(x) -> raise Type_error
-             | Impl(x, y) -> (
-                match List.assoc b c with
-                  | Term(x) -> y
-                  | Impl(_, _) -> raise Type_error
+            | Var(e) -> List.assoc e c
+            | App(b, a) -> (
+                match b with
+                    | Var(b1) -> (
+                        match List.assoc b1 c with
+                            | Term(x) -> raise Type_error
+                            (** Raise Type_error because a Term Type does not
+                            represent a function *)
+                            | Impl(x, y) -> (
+                                if x <> infer_type c a
+                                then raise Type_error
+                                else y
+                            )
+                    )
+                    | _ -> raise Type_error
+                    (** I think we don't reach this because of left-associativity *)
                 )
+            | Abs(a, tp, b) -> (
+                Impl(tp, infer_type (c) (b))
             )
-        | Abs(a, tp, b) -> (
-            Impl(tp, infer_type (c) (b))
-        )
     with
         | Not_found -> raise Type_error
 
 
-(**A→B
+(**
     Trying things out.
  *)
-let a:tvar = "A";;
-let b:tvar = "B";;
-let c:tvar = "C";;
+let atvar:tvar = "A";;
+let btvar:tvar = "B";;
+let ctvar:tvar = "C";;
 
 
-let at:ty = Term a;;
-let bt:ty = Term b;;
-let ct:ty = Term c;;
+let at:ty = Term atvar;;
+let bt:ty = Term btvar;;
+let ct:ty = Term ctvar;;
 
 let abt:ty = Impl(at, bt);;
-let act:ty = Impl(at, ct);;
+let act:ty = Impl(at, ct);;                (*
+                match tp with
+                | Term(x) -> Impl(tp, infer_type (c) (b))
+                | Impl(x, y) -> ( Impl(tp, infer_type (c) (b))
+
+                    match infer_type (c) (b) with
+                        | Term(x1) -> if x <> Term x1 then raise Type_error else y
+                        | Impl(x1, y1) -> (
+                            Impl(tp, infer_type (c) (b))
+
+                            match x1 with
+                            | Term(x2) -> Impl(tp, infer_type (c) (b))
+                            | Impl(x2, y2) ->
+                                if x <> x2 then Impl(tp, infer_type (c) (b)) else
+                                Impl(tp, infer_type (c) (b))
+                            if x1 <> x then
+                            Impl(tp, infer_type (c) (b))
+                            else raise Type_error
+                            *)
+let bct:ty = Impl(bt, ct);;
 let abact:ty = Impl(abt, act);;
 
 
 let x:var = "x";;
 let f:var = "f";;
 let t:var = "t";;
+let gvar:var = "g";;
 
 
 let xvar:tm = Var(x);;
 let tvar:tm = Var(t);;
+let fvar:tm = Var(f);;
 
-let fx:tm = App(f, x);;
+let fx:tm = App(fvar, xvar);;
 let xf:tm = Abs(x, at, fx);;
 
-let lt1:tm = Abs(f, abt, fx);;
-let lt2:tm = Abs(f, abt, xf);;
 
-let av:var = "a"
-let ca:context = [(av, at)]
-let avar:tm = Var(av)
+let avar:var = "a"
+let bvar:var = "b"
 
-let cab:context = [(b, abt); (a, at)]
-let ab:tm = App(b, a)
+let atm:tm = Var(avar)
+let btm:tm = Var(bvar)
+let gtm:tm = Var(gvar)
+
+let cab:context = [(bvar, abt); (avar, at)]
+let ba:tm = App(btm, atm)
 
 let cxt:context = [(x, at); (t, bt)]
 let xt:tm = Abs(x, at, tvar)
 
+let example_context = [(f, abt); (gvar, bct); (x, at)]
+
+let gfx:tm = App(gtm, fx)
+let xg:tm = Abs(x, at, gfx)
+let gxg:tm = Abs(gvar, bct, xg)
+let fgxgfx:tm = Abs(f, abt, gxg)
+
+let fa_context:context = [(f, at)]
+let fa:tm = Abs(f, at, xvar)
+
+let fa_b_context:context = [(f, at); (x, bt)]
+let xfx:tm = Abs(x, bt, fx)
+let fxfx:tm = Abs(f, at, xfx)
+
+let fab_context:context = [(f, abt); (x, bt)]
+let fabxfx:tm = Abs(f, abt, xfx)
 
 
 let () =
+    print_string ("Print the example type: ");;
     print_endline (string_of_ty(abact));;
-    print_endline (string_of_tm(fx));;
-    print_endline (string_of_tm(lt1));;
-    print_endline (string_of_tm(lt2));;
-    print_string (av ^ ":" ^ string_of_ty(at) ^ ": ");;
-    print_endline (string_of_ty(infer_type (ca) (avar)));;
-    print_string (b ^ ":" ^string_of_ty(abt) ^ ".");;
-    print_string (a ^ ":" ^ string_of_ty(at) ^ ": ");;
-    print_endline (string_of_ty(infer_type (cab) (ab)));;
+
+    print_string ("Print application b.a: ");;
+    print_string (btvar ^ ":" ^string_of_ty(abt) ^ ".");;
+    print_string (atvar ^ ":" ^ string_of_ty(at) ^ ":   ");;
+    print_string (string_of_tm(ba) ^ ": ");;
+    print_endline (string_of_ty(infer_type (cab) (ba)));;
+
+    print_string ("Print abstraction Lxt: ");;
+    print_string (string_of_tm (xt) ^ ":" ^ btvar ^ ":   ");;
     print_endline (string_of_ty(infer_type (cxt) (xt)));;
+
+    (** 1.4 Testing *)
+    print_endline (string_of_tm (fgxgfx));;
+    print_endline (string_of_ty(infer_type (example_context) (fgxgfx)));;
+
+    (**
+
+    Because OCaml seems to stop after throwing an exception,
+    I cannot run all these in succession, which is why I commented them
+    out. I tried them, and they all throw Type_error.
+    ******************************************************************
+
+    print_endline (string_of_tm fa);;
+    print_endline (string_of_ty (infer_type (fa_context) (fa)));;
+
+    print_endline (string_of_tm fxfx);;
+    print_endline (string_of_ty (infer_type (fa_b_context) (fxfx)));;
+
+    print_endline (string_of_tm fabxfx);;
+    print_endline (string_of_ty (infer_type (fab_context) (fabxfx)));;
+    *)
