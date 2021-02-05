@@ -31,7 +31,7 @@ type tm =
 let rec string_of_ty e =
   match e with
     | Term(t) -> t
-    | Impl(t1, t2) -> String.concat "" ["("; String.concat " \u{21d2} " [string_of_ty(t1); string_of_ty(t2)]; ")"]
+    | Impl(t1, t2) -> String.concat "" ["("; String.concat " \u{21fe} " [string_of_ty(t1); string_of_ty(t2)]; ")"]
 
 
 
@@ -105,11 +105,14 @@ let rec infer_type env = function
         Impl(a, infer_type ((x, a)::env) t)
     | App (t, u) ->
         match infer_type env t with
-            | Impl(a, b) -> if check_type env u a <> false then b else raise Type_error
+            | Impl(a, b) -> if check_type env u a == true then b else raise Type_error
             | _ -> raise Type_error
 
 and check_type env t a =
-    if infer_type env t <> a then false else true
+    try
+        if infer_type env t <> a then false else true
+    with
+    | Type_error -> false
 
 (**
     Trying things out.
@@ -127,6 +130,8 @@ let abt:ty = Impl(at, bt);;
 let act:ty = Impl(at, ct);;
 let bct:ty = Impl(bt, ct);;
 let abact:ty = Impl(abt, act);;
+let aat:ty = Impl(at, at)
+let bbt:ty = Impl(bt, bt)
 
 
 let x:var = "x";;
@@ -174,7 +179,8 @@ let fab_context:context = [(f, abt); (x, bt)]
 let fabxfx:tm = Abs(f, abt, xfx)
 
 let lxax:tm = Abs(x, at, xvar)
-let aat:ty = Impl(at, at)
+
+let empty_context:context = []
 
 
 let () =
@@ -211,4 +217,12 @@ let () =
     print_endline (string_of_tm fabxfx);;
     print_endline (string_of_ty (infer_type (fab_context) (fabxfx)));;
     *)
-    if check_type (cxt) (lxax) (aat) <> false then print_endline("True") else print_endline("False");;
+    print_endline("Run check_type on the given examples: ");;
+    print_string(string_of_tm(lxax) ^ " " ^ string_of_ty(aat) ^ ": ");;
+    if check_type (cxt) (lxax) (aat) == true then print_endline("True") else print_endline("False");;
+
+    print_string(string_of_tm(lxax) ^ " " ^ string_of_ty(bbt) ^ ": ");;
+    if check_type (cxt) (lxax) (bbt) == true then print_endline("True") else print_endline("False");;
+
+    print_string(string_of_tm(xvar) ^ " " ^ string_of_ty(aat) ^ ": ");;
+    if check_type (empty_context) (xvar) (at) == true then print_endline("True") else print_endline("False");;
