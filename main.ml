@@ -56,7 +56,7 @@ let ex1 = Failure "first"
 let ex2 = Failure "second"
 
 
-let rec infer_type c t =
+let rec old_infer_type c t =
     try
         match t with
             | Var(e) -> List.assoc e c
@@ -68,7 +68,7 @@ let rec infer_type c t =
                             (** Raise Type_error because a Term Type does not
                             represent a function *)
                             | Impl(x, y) -> (
-                                if x <> infer_type c a
+                                if x <> old_infer_type c a
                                 then raise Type_error
                                 else y
                             )
@@ -77,11 +77,39 @@ let rec infer_type c t =
                     (** I think we don't reach this because of left-associativity *)
                 )
             | Abs(a, tp, b) -> (
-                Impl(tp, infer_type (c) (b))
+                Impl(tp, old_infer_type ((a, tp)::c) (b))
             )
     with
         | Not_found -> raise Type_error
 
+
+(**
+    1.6. Type inference and type checking as mutually
+    recursive functions.
+
+I initially started with modifying old_infer_type to write this, then
+I noticed that a (shorter) implementation was given in the book.
+I left my infer_type as-is (renamed to old_infer_type)
+as some evidence that I actually worked on
+it on my own; the more "advanced" syntax comes from the book;
+you can tell that I am an OCaml novice when you compare the earlier function
+definition to the following one.
+
+I made sure that infer_type and old_infer_type produce the same results for the
+test cases and a few extra examples.
+ *)
+let rec infer_type env = function
+    | Var x ->
+        (try List.assoc x env with Not_found -> raise Type_error)
+    | Abs (x, a, t) ->
+        Impl(a, infer_type ((x, a)::env) t)
+    | App (t, u) ->
+        match infer_type env t with
+            | Impl(a, b) -> if check_type env u a <> false then b else raise Type_error
+            | _ -> raise Type_error
+
+and check_type env t a =
+    if infer_type env t <> a then false else true
 
 (**
     Trying things out.
@@ -96,25 +124,7 @@ let bt:ty = Term btvar;;
 let ct:ty = Term ctvar;;
 
 let abt:ty = Impl(at, bt);;
-let act:ty = Impl(at, ct);;                (*
-                match tp with
-                | Term(x) -> Impl(tp, infer_type (c) (b))
-                | Impl(x, y) -> ( Impl(tp, infer_type (c) (b))
-
-                    match infer_type (c) (b) with
-                        | Term(x1) -> if x <> Term x1 then raise Type_error else y
-                        | Impl(x1, y1) -> (
-                            Impl(tp, infer_type (c) (b))
-
-                            match x1 with
-                            | Term(x2) -> Impl(tp, infer_type (c) (b))
-                            | Impl(x2, y2) ->
-                                if x <> x2 then Impl(tp, infer_type (c) (b)) else
-                                Impl(tp, infer_type (c) (b))
-                            if x1 <> x then
-                            Impl(tp, infer_type (c) (b))
-                            else raise Type_error
-                            *)
+let act:ty = Impl(at, ct);;
 let bct:ty = Impl(bt, ct);;
 let abact:ty = Impl(abt, act);;
 
@@ -128,7 +138,7 @@ let gvar:var = "g";;
 let xvar:tm = Var(x);;
 let tvar:tm = Var(t);;
 let fvar:tm = Var(f);;
-
+true
 let fx:tm = App(fvar, xvar);;
 let xf:tm = Abs(x, at, fx);;
 
@@ -162,6 +172,9 @@ let fxfx:tm = Abs(f, at, xfx)
 
 let fab_context:context = [(f, abt); (x, bt)]
 let fabxfx:tm = Abs(f, abt, xfx)
+
+let lxax:tm = Abs(x, at, xvar)
+let aat:ty = Impl(at, at)
 
 
 let () =
@@ -198,3 +211,4 @@ let () =
     print_endline (string_of_tm fabxfx);;
     print_endline (string_of_ty (infer_type (fab_context) (fabxfx)));;
     *)
+    if check_type (cxt) (lxax) (aat) <> false then print_endline("True") else print_endline("False");;
